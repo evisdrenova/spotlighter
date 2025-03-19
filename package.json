@@ -1,8 +1,9 @@
 {
   "name": "spotlighter",
-  "displayName": "Spotlight for Code in Vscode",
+  "displayName": "Spotlight for Code in VSCode",
   "description": "Dims all code outside the current function with your cursor.",
   "version": "0.0.1",
+  "repository": "https://github.com/evisdrenova/spotlighter",
   "publisher": "evisdrenova",
   "engines": {
     "vscode": "^1.70.0"
@@ -11,20 +12,41 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:rust"
+    "onLanguage:rust",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "spotlighter.enable",
-        "title": "Enable Rust Function Spotlighter"
+        "title": "Enable Function Spotlighter"
       },
       {
         "command": "spotlighter.debugSymbols",
-        "title": "Debug: Log Rust Symbols"
+        "title": "Debug: Log Function Symbols"
+      },
+      {
+        "command": "spotlighter.updateDecorations",
+        "title": "Update Function Highlighting"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Function Spotlighter",
+      "properties": {
+        "spotlighter.dimOpacity": {
+          "type": "number",
+          "default": 0.3,
+          "description": "Opacity level for dimmed code (0.0-1.0)"
+        },
+        "spotlighter.dimBackground": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add slight background color to dimmed areas"
+        }
+      }
+    }
   },
   "scripts": {
     "compile": "tsc -p .",

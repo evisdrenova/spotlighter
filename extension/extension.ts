@@ -10,21 +10,27 @@ const NORMAL_DECORATION = vscode.window.createTextEditorDecorationType({
   opacity: "1.0",
 });
 
+// Supported languages
+const SUPPORTED_LANGUAGES = ["rust", "typescript", "typescriptreact"];
+
 /**
  * Activates the extension.
  */
 export function activate(context: vscode.ExtensionContext) {
-  console.log("Focus Rust Fn extension is active.");
+  console.log("Function Spotlighter extension is active.");
 
   // Register the command that can be called from Command Palette
   const enableCmd = vscode.commands.registerCommand(
     "spotlighter.enable",
     () => {
-      vscode.window.showInformationMessage("Rust Function Spotlighter enabled");
+      vscode.window.showInformationMessage("Function Spotlighter enabled");
     }
   );
 
   context.subscriptions.push(enableCmd);
+
+  // Register debug command
+  registerDebugCommand(context);
 
   // Whenever the cursor moves, update decorations.
   const disposable = vscode.window.onDidChangeTextEditorSelection(
@@ -36,9 +42,9 @@ export function activate(context: vscode.ExtensionContext) {
 
       const doc = editor.document;
 
-      // Only run on Rust files
-      if (doc.languageId !== "rust") {
-        // Clear decorations if we're no longer in a Rust file
+      // Only run on supported files
+      if (!SUPPORTED_LANGUAGES.includes(doc.languageId)) {
+        // Clear decorations if we're no longer in a supported file
         clearAllDecorations(editor);
         return;
       }
@@ -65,7 +71,8 @@ export function activate(context: vscode.ExtensionContext) {
         // 2. Find the function symbol containing the cursor
         const functionSymbol = findEnclosingFunctionSymbol(
           symbols,
-          selection.active
+          selection.active,
+          doc.languageId
         );
 
         if (!functionSymbol) {
@@ -123,7 +130,92 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Initial decoration update for the active editor
   if (vscode.window.activeTextEditor) {
-    vscode.commands.executeCommand("spotlighter.updateDecorations");
+    const editor = vscode.window.activeTextEditor;
+    if (SUPPORTED_LANGUAGES.includes(editor.document.languageId)) {
+      updateDecorations(editor);
+    }
+  }
+
+  // Register a command to manually update decorations
+  const updateCmd = vscode.commands.registerCommand(
+    "spotlighter.updateDecorations",
+    () => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor && SUPPORTED_LANGUAGES.includes(editor.document.languageId)) {
+        updateDecorations(editor);
+      }
+    }
+  );
+
+  context.subscriptions.push(updateCmd);
+}
+
+/**
+ * Update decorations for the current cursor position
+ */
+async function updateDecorations(editor: vscode.TextEditor) {
+  if (!editor) return;
+
+  const doc = editor.document;
+  const position = editor.selection.active;
+
+  try {
+    // Get all symbols in this file
+    const symbols = (await vscode.commands.executeCommand(
+      "vscode.executeDocumentSymbolProvider",
+      doc.uri
+    )) as vscode.DocumentSymbol[] | undefined;
+
+    if (!symbols || symbols.length === 0) {
+      clearAllDecorations(editor);
+      return;
+    }
+
+    // Find the function symbol containing the cursor
+    const functionSymbol = findEnclosingFunctionSymbol(
+      symbols,
+      position,
+      doc.languageId
+    );
+
+    if (!functionSymbol) {
+      clearAllDecorations(editor);
+      return;
+    }
+
+    // Create ranges for the rest of the document that should be dimmed
+    const ranges: vscode.Range[] = [];
+
+    // Add range from start of document to start of function
+    if (functionSymbol.range.start.line > 0) {
+      ranges.push(
+        new vscode.Range(
+          new vscode.Position(0, 0),
+          new vscode.Position(functionSymbol.range.start.line, 0)
+        )
+      );
+    }
+
+    // Add range from end of function to end of document
+    const lastLine = doc.lineCount - 1;
+    if (functionSymbol.range.end.line < lastLine) {
+      ranges.push(
+        new vscode.Range(
+          new vscode.Position(
+            functionSymbol.range.end.line,
+            doc.lineAt(functionSymbol.range.end.line).text.length
+          ),
+          new vscode.Position(lastLine, doc.lineAt(lastLine).text.length)
+        )
+      );
+    }
+
+    // Apply decorations
+    editor.setDecorations(DIM_DECORATION, ranges);
+    editor.setDecorations(NORMAL_DECORATION, [functionSymbol.range]);
+  } catch (err) {
+    console.error("Error updating decorations:", err);
+    clearAllDecorations(editor);
   }
 }
 
@@ -133,26 +225,24 @@ export function activate(context: vscode.ExtensionContext) {
  */
 function findEnclosingFunctionSymbol(
   symbols: vscode.DocumentSymbol[],
-  position: vscode.Position
+  position: vscode.Position,
+  languageId: string
 ): vscode.DocumentSymbol | undefined {
   let found: vscode.DocumentSymbol | undefined = undefined;
 
   for (const sym of symbols) {
     if (sym.range.contains(position)) {
       // If it's a function or method, hold onto it
-      if (
-        sym.kind === vscode.SymbolKind.Function ||
-        sym.kind === vscode.SymbolKind.Method ||
-        // Rust-specific symbols that may represent functions
-        sym.kind === vscode.SymbolKind.Constructor ||
-        sym.kind === vscode.SymbolKind.Module || // For impl blocks
-        sym.kind === vscode.SymbolKind.Namespace // For impl blocks
-      ) {
+      if (isFunction(sym, languageId)) {
         found = sym;
       }
 
       // Check children to see if there's a nested symbol
-      const childMatch = findEnclosingFunctionSymbol(sym.children, position);
+      const childMatch = findEnclosingFunctionSymbol(
+        sym.children,
+        position,
+        languageId
+      );
       if (childMatch) {
         // If child is also a function, prefer the deeper nested one
         found = childMatch;
@@ -161,6 +251,44 @@ function findEnclosingFunctionSymbol(
   }
 
   return found;
+}
+
+/**
+ * Determine if a symbol is a function based on language-specific rules
+ */
+function isFunction(sym: vscode.DocumentSymbol, languageId: string): boolean {
+  // Common function kinds across languages
+  if (
+    sym.kind === vscode.SymbolKind.Function ||
+    sym.kind === vscode.SymbolKind.Method ||
+    sym.kind === vscode.SymbolKind.Constructor
+  ) {
+    return true;
+  }
+
+  // Language-specific rules
+  switch (languageId) {
+    case "rust":
+      // For Rust, also consider impl blocks and modules
+      return (
+        sym.kind === vscode.SymbolKind.Module ||
+        sym.kind === vscode.SymbolKind.Namespace
+      );
+
+    case "typescript":
+    case "typescriptreact":
+      // For TypeScript/TSX, also consider arrow functions and class methods
+      // Most arrow functions should be caught by SymbolKind.Function already
+      // but we can add additional checks here if needed
+      return (
+        sym.kind === vscode.SymbolKind.Class || // For class methods
+        sym.kind === vscode.SymbolKind.Field || // For class fields that might be arrow functions
+        sym.kind === vscode.SymbolKind.Variable // For variables that might be arrow functions
+      );
+
+    default:
+      return false;
+  }
 }
 
 /**
