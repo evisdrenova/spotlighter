@@ -6,6 +6,7 @@
   "repository": "https://github.com/evisdrenova/spotlighter",
   "publisher": "EvisDrenova",
   "license": "MIT",
+  "icon": "assets/spotlight-logo.png",
   "engines": {
     "vscode": "^1.70.0"
   },
