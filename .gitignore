@@ -4,7 +4,9 @@
 **/*.rs.bk
 
 # If you don’t want to commit Cargo.lock in a library (but keep it for apps):
-# /Cargo.lock
+/Cargo.lock
+/Cargo.toml
+/src
 
 # ---- Node/TypeScript ----
 # Dependencies:
