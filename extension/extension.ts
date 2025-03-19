@@ -11,7 +11,14 @@ const NORMAL_DECORATION = vscode.window.createTextEditorDecorationType({
 });
 
 // Supported languages
-const SUPPORTED_LANGUAGES = ["rust", "typescript", "typescriptreact", "python"];
+const SUPPORTED_LANGUAGES = [
+  "rust",
+  "typescript",
+  "typescriptreact",
+  "python",
+  "javascript",
+  "javascriptreact",
+];
 
 /**
  * Activates the extension.
@@ -119,7 +126,7 @@ async function updateDecorationsForPosition(
       return;
     }
 
-    // For Python specifically, we need to handle indentation-based code blocks
+    // Language-specific function detection
     let functionSymbol: vscode.DocumentSymbol | undefined;
 
     if (doc.languageId === "python") {
@@ -386,11 +393,16 @@ function isFunction(sym: vscode.DocumentSymbol, languageId: string): boolean {
 
     case "typescript":
     case "typescriptreact":
-      // For TypeScript/TSX, also consider arrow functions and class methods
+    case "javascript":
+    case "javascriptreact":
+      // For JavaScript/TypeScript, also consider arrow functions and class methods
       return (
         sym.kind === vscode.SymbolKind.Class || // For class methods
         sym.kind === vscode.SymbolKind.Field || // For class fields that might be arrow functions
-        sym.kind === vscode.SymbolKind.Variable // For variables that might be arrow functions
+        sym.kind === vscode.SymbolKind.Variable || // For variables that might be arrow functions
+        sym.kind === vscode.SymbolKind.Property || // For object properties that are functions
+        sym.kind === vscode.SymbolKind.Module || // For JS modules
+        sym.kind === vscode.SymbolKind.Object // For JS objects
       );
 
     case "python":
@@ -430,41 +442,20 @@ function registerDebugCommand(context: vscode.ExtensionContext) {
       )) as vscode.DocumentSymbol[];
 
       console.log("All symbols:", symbols);
+      console.log("Language ID:", editor.document.languageId);
 
-      // If it's a Python file, also log indentation analysis
+      // Log language-specific debugging info
       if (editor.document.languageId === "python") {
-        const doc = editor.document;
-        const position = editor.selection.active;
-        const currentLine = position.line;
-        const currentIndent = getIndentation(doc.lineAt(currentLine).text);
-
-        console.log(`Current line: ${currentLine}, indent: ${currentIndent}`);
-        console.log(`Current line text: "${doc.lineAt(currentLine).text}"`);
-
-        // Find function definition by indentation
-        let defLine = -1;
-        for (let i = currentLine; i >= 0; i--) {
-          const lineText = doc.lineAt(i).text;
-          if (
-            lineText.trim().startsWith("def ") &&
-            getIndentation(lineText) < currentIndent
-          ) {
-            defLine = i;
-            break;
-          }
-        }
-
-        if (defLine !== -1) {
-          console.log(
-            `Found function def at line ${defLine}: "${
-              doc.lineAt(defLine).text
-            }"`
-          );
-        } else {
-          console.log(
-            "No enclosing function def found by indentation analysis"
-          );
-        }
+        logPythonDebugInfo(editor.document, editor.selection.active);
+      } else if (
+        [
+          "javascript",
+          "javascriptreact",
+          "typescript",
+          "typescriptreact",
+        ].includes(editor.document.languageId)
+      ) {
+        logJsDebugInfo(symbols);
       }
 
       vscode.window.showInformationMessage(
@@ -474,6 +465,84 @@ function registerDebugCommand(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(debugCmd);
+}
+
+/**
+ * Log Python-specific debug information
+ */
+function logPythonDebugInfo(
+  doc: vscode.TextDocument,
+  position: vscode.Position
+) {
+  const currentLine = position.line;
+  const currentIndent = getIndentation(doc.lineAt(currentLine).text);
+
+  console.log(`Current line: ${currentLine}, indent: ${currentIndent}`);
+  console.log(`Current line text: "${doc.lineAt(currentLine).text}"`);
+
+  // Find function definition by indentation
+  let defLine = -1;
+  for (let i = currentLine; i >= 0; i--) {
+    const lineText = doc.lineAt(i).text;
+    if (
+      lineText.trim().startsWith("def ") &&
+      getIndentation(lineText) < currentIndent
+    ) {
+      defLine = i;
+      break;
+    }
+  }
+
+  if (defLine !== -1) {
+    console.log(
+      `Found function def at line ${defLine}: "${doc.lineAt(defLine).text}"`
+    );
+  } else {
+    console.log("No enclosing function def found by indentation analysis");
+  }
+}
+
+/**
+ * Log JavaScript/TypeScript-specific debug information
+ */
+function logJsDebugInfo(symbols: vscode.DocumentSymbol[]) {
+  // Log counts of different symbol kinds to help with debugging
+  const kindCounts: Record<string, number> = {};
+
+  function countSymbolKinds(syms: vscode.DocumentSymbol[]) {
+    for (const sym of syms) {
+      const kind = vscode.SymbolKind[sym.kind] || sym.kind.toString();
+      kindCounts[kind] = (kindCounts[kind] || 0) + 1;
+
+      if (sym.children && sym.children.length > 0) {
+        countSymbolKinds(sym.children);
+      }
+    }
+  }
+
+  countSymbolKinds(symbols);
+  console.log("Symbol kinds found:", kindCounts);
+
+  // Log function-like symbols
+  const functionLikeSymbols = symbols.filter(
+    (sym) =>
+      sym.kind === vscode.SymbolKind.Function ||
+      sym.kind === vscode.SymbolKind.Method ||
+      sym.kind === vscode.SymbolKind.Constructor
+  );
+
+  console.log(
+    `Found ${functionLikeSymbols.length} direct function-like symbols`
+  );
+
+  // Log variable declarations that might be functions
+  const potentialFunctionVars = symbols.filter(
+    (sym) => sym.kind === vscode.SymbolKind.Variable
+  );
+
+  console.log(
+    `Found ${potentialFunctionVars.length} variables that could be functions`
+  );
 }
 
 export function deactivate() {

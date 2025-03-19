@@ -16,7 +16,9 @@
     "onLanguage:rust",
     "onLanguage:typescript",
     "onLanguage:typescriptreact",
-    "onLanguage:python"
+    "onLanguage:python",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact"
   ],
   "main": "./out/extension.js",
   "contributes": {
