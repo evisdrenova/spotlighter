@@ -6,7 +6,7 @@ https://github.com/user-attachments/assets/2d67fd7b-28ac-48da-95a0-f079246b3ed1
 
 ## How It Works
 
-- When your cursor is inside a function, Spotlighter uses Rust symbols (provided by [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)) to determine that function’s boundaries.
+- When your cursor is inside a function, Spotlighter uses symbols to determine that function’s boundaries.
 - It applies a “dim” decoration to everything else, so the function you’re working on stays fully visible.
 
 ## Supported languages
@@ -18,57 +18,6 @@ https://github.com/user-attachments/assets/2d67fd7b-28ac-48da-95a0-f079246b3ed1
 5. TypescriptReact
 6. Python
 7. Go
-
-## Installation
-
-If you just have this code in a Git repo and want to run the extension locally:
-
-1. Clone orDownload the repository:
-
-   ```bash
-   git clone https://github.com/YourUser/spotlighter.git
-   cd spotlighter
-   ```
-
-2. Install Dependencies:
-
-```bash
-npm install
-```
-
-3. Compile the Extension:
-
-```bash
-npm run compile
-```
-
-This will build the TypeScript source into the out/ folder.
-
-4. Open in VS Code:
-
-- Open the spotlighter folder in VS Code.
-- Make sure your Rust codebase is in a folder with a Cargo.toml, or open a separate Rust project in another VS Code window to test.
-
-5. Launch the Extension:
-
-- Press F5 in VS Code, or go to the Run and Debug view and select “Run Extension”.
-- A new VS Code window (the “Extension Development Host”) will open, with Spotlighter activated.
-
-6. Using Spotlighter
-
-- Open a Rust File in the Extension Development Host.
-- Place Your Cursor inside any function.
-- Observe that the code outside of the current function is dimmed, keeping your focus on the function body.
-
-If you move your cursor outside the function or to a different function, Spotlighter updates automatically.
-
-# Publishing or Installing a .vsix
-
-If you create a .vsix package (via vsce package), you can install it directly in VS Code:
-
-1. Press Cmd+Shift+P (macOS) or Ctrl+Shift+P (Windows/Linux) to open the Command Palette.
-   Search for “Extensions: Install from VSIX…” and select your .vsix file.
-2. Once installed, Spotlighter will be available like any other extension.
 
 # Contributing
 
