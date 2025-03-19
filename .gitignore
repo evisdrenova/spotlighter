@@ -1,0 +1,35 @@
+# ---- Rust ----
+# Cargo build artifacts:
+/target/
+**/*.rs.bk
+
+# If you don’t want to commit Cargo.lock in a library (but keep it for apps):
+# /Cargo.lock
+
+# ---- Node/TypeScript ----
+# Dependencies:
+/node_modules/
+
+# Compiled output:
+/out/
+dist/
+build/
+
+# Logs:
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# VS Code Extension package (if you don’t want to commit the .vsix file):
+*.vsix
+
+# ---- Editor/OS Artifacts ----
+# VS Code settings (optional—if you don’t want to share your .vscode config):
+.vscode/
+
+# macOS system files:
+.DS_Store
+
+# Misc. environment or config files:
+.env
+.env.local
