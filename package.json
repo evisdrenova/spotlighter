@@ -4,7 +4,8 @@
   "description": "Dims all code outside the current function with your cursor.",
   "version": "0.0.1",
   "repository": "https://github.com/evisdrenova/spotlighter",
-  "publisher": "evisdrenova",
+  "publisher": "EvisDrenova",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.70.0"
   },
@@ -14,7 +15,8 @@
   "activationEvents": [
     "onLanguage:rust",
     "onLanguage:typescript",
-    "onLanguage:typescriptreact"
+    "onLanguage:typescriptreact",
+    "onLanguage:python"
   ],
   "main": "./out/extension.js",
   "contributes": {
