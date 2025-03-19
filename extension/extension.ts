@@ -1,14 +1,30 @@
 import * as vscode from "vscode";
 
-// More visible opacity difference to make the effect more noticeable
-const DIM_DECORATION = vscode.window.createTextEditorDecorationType({
-  opacity: "0.3",
-  backgroundColor: "rgba(128,128,128,0.05)",
-});
+/**
+ * Get decoration types based on user settings
+ */
+function getDecorationTypes(): {
+  dimDecoration: vscode.TextEditorDecorationType;
+  normalDecoration: vscode.TextEditorDecorationType;
+} {
+  const config = vscode.workspace.getConfiguration("spotlighter");
+  const dimOpacity = config.get<number>("dimOpacity") || 0.3;
+  const dimBackground = config.get<boolean>("dimBackground") || true;
+  const dimColor =
+    config.get<string>("dimBackgroundColor") || "rgba(128,128,128,0.05)";
+  const normalOpacity = config.get<number>("normalOpacity") || 1.0;
 
-const NORMAL_DECORATION = vscode.window.createTextEditorDecorationType({
-  opacity: "1.0",
-});
+  const dimDecoration = vscode.window.createTextEditorDecorationType({
+    opacity: dimOpacity.toString(),
+    backgroundColor: dimBackground ? dimColor : undefined,
+  });
+
+  const normalDecoration = vscode.window.createTextEditorDecorationType({
+    opacity: normalOpacity.toString(),
+  });
+
+  return { dimDecoration, normalDecoration };
+}
 
 // Supported languages
 const SUPPORTED_LANGUAGES = [
@@ -21,11 +37,19 @@ const SUPPORTED_LANGUAGES = [
   "go",
 ];
 
+let dimDecoration: vscode.TextEditorDecorationType;
+let normalDecoration: vscode.TextEditorDecorationType;
+
 /**
  * Activates the extension.
  */
 export function activate(context: vscode.ExtensionContext) {
   console.log("Function Spotlighter extension is active.");
+
+  // Initialize decorations from user settings
+  const decorations = getDecorationTypes();
+  dimDecoration = decorations.dimDecoration;
+  normalDecoration = decorations.normalDecoration;
 
   // Register the command that can be called from Command Palette
   const enableCmd = vscode.commands.registerCommand(
@@ -40,6 +64,37 @@ export function activate(context: vscode.ExtensionContext) {
   // Register debug command
   registerDebugCommand(context);
 
+  // Register a command to toggle the extension on/off
+  const toggleCmd = vscode.commands.registerCommand(
+    "spotlighter.toggle",
+    () => {
+      const config = vscode.workspace.getConfiguration("spotlighter");
+      const currentEnabledState = config.get<boolean>("enabled") || true;
+
+      // Toggle the enabled state
+      config.update("enabled", !currentEnabledState, true).then(() => {
+        const newState = !currentEnabledState ? "enabled" : "disabled";
+        vscode.window.showInformationMessage(
+          `Function Spotlighter ${newState}`
+        );
+
+        // Update decorations based on new state
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+          if (!currentEnabledState) {
+            // Just turned on, update decorations
+            updateDecorations(editor);
+          } else {
+            // Just turned off, clear decorations
+            clearAllDecorations(editor);
+          }
+        }
+      });
+    }
+  );
+
+  context.subscriptions.push(toggleCmd);
+
   // Whenever the cursor moves, update decorations.
   const disposable = vscode.window.onDidChangeTextEditorSelection(
     async (event) => {
@@ -50,9 +105,12 @@ export function activate(context: vscode.ExtensionContext) {
 
       const doc = editor.document;
 
-      // Only run on supported files
-      if (!SUPPORTED_LANGUAGES.includes(doc.languageId)) {
-        // Clear decorations if we're no longer in a supported file
+      // Only run on supported files and if enabled
+      const config = vscode.workspace.getConfiguration("spotlighter");
+      const isEnabled = config.get<boolean>("enabled") ?? true;
+
+      if (!isEnabled || !SUPPORTED_LANGUAGES.includes(doc.languageId)) {
+        // Clear decorations if we're no longer in a supported file or disabled
         clearAllDecorations(editor);
         return;
       }
@@ -69,18 +127,53 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(disposable);
 
+  // Listen for changes to configuration
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("spotlighter")) {
+        // Dispose old decorations
+        dimDecoration.dispose();
+        normalDecoration.dispose();
+
+        // Create new decorations with updated settings
+        const decorations = getDecorationTypes();
+        dimDecoration = decorations.dimDecoration;
+        normalDecoration = decorations.normalDecoration;
+
+        // Update current editor if any
+        const editor = vscode.window.activeTextEditor;
+        if (
+          editor &&
+          SUPPORTED_LANGUAGES.includes(editor.document.languageId)
+        ) {
+          updateDecorations(editor);
+        }
+      }
+    })
+  );
+
   // Initial decoration update for the active editor
   if (vscode.window.activeTextEditor) {
     const editor = vscode.window.activeTextEditor;
     if (SUPPORTED_LANGUAGES.includes(editor.document.languageId)) {
-      updateDecorations(editor);
+      // Check if extension is enabled before applying
+      const config = vscode.workspace.getConfiguration("spotlighter");
+      const isEnabled = config.get<boolean>("enabled") ?? true;
+
+      if (isEnabled) {
+        updateDecorations(editor);
+      }
     }
   }
 
   // Also update decorations when document is saved
   const saveDisposable = vscode.workspace.onDidSaveTextDocument((document) => {
     const editor = vscode.window.activeTextEditor;
+    const config = vscode.workspace.getConfiguration("spotlighter");
+    const isEnabled = config.get<boolean>("enabled") ?? true;
+
     if (
+      isEnabled &&
       editor &&
       editor.document === document &&
       SUPPORTED_LANGUAGES.includes(document.languageId)
@@ -96,7 +189,14 @@ export function activate(context: vscode.ExtensionContext) {
     "spotlighter.updateDecorations",
     () => {
       const editor = vscode.window.activeTextEditor;
-      if (editor && SUPPORTED_LANGUAGES.includes(editor.document.languageId)) {
+      const config = vscode.workspace.getConfiguration("spotlighter");
+      const isEnabled = config.get<boolean>("enabled") ?? true;
+
+      if (
+        isEnabled &&
+        editor &&
+        SUPPORTED_LANGUAGES.includes(editor.document.languageId)
+      ) {
         updateDecorations(editor);
       }
     }
@@ -148,6 +248,13 @@ async function updateDecorationsForPosition(
       return;
     }
 
+    // Verify this is a true function, not just a variable or other declaration
+    if (!isActualFunction(functionSymbol, doc.languageId)) {
+      console.log("Symbol is not a function, clearing decorations");
+      clearAllDecorations(editor);
+      return;
+    }
+
     console.log(
       `Found function: ${functionSymbol.name} at range: ${functionSymbol.range.start.line}-${functionSymbol.range.end.line}`
     );
@@ -183,12 +290,68 @@ async function updateDecorationsForPosition(
     }
 
     // Apply decorations
-    editor.setDecorations(DIM_DECORATION, ranges);
-    editor.setDecorations(NORMAL_DECORATION, [functionSymbol.range]);
+    editor.setDecorations(dimDecoration, ranges);
+    editor.setDecorations(normalDecoration, [functionSymbol.range]);
   } catch (err) {
     console.error("Error retrieving or parsing symbols:", err);
     clearAllDecorations(editor);
   }
+}
+
+/**
+ * Check if a symbol is actually a function by examining its content
+ */
+function isActualFunction(
+  symbol: vscode.DocumentSymbol,
+  languageId: string
+): boolean {
+  // If it's explicitly a function or method by symbol kind, trust that
+  if (
+    symbol.kind === vscode.SymbolKind.Function ||
+    symbol.kind === vscode.SymbolKind.Method ||
+    symbol.kind === vscode.SymbolKind.Constructor
+  ) {
+    return true;
+  }
+
+  // For variable-like symbols, check if they span multiple lines
+  // Single-line variables are unlikely to be functions
+  const lineSpan = symbol.range.end.line - symbol.range.start.line;
+
+  // If it spans multiple lines, it's more likely to be a function
+  if (lineSpan > 0) {
+    // For JS/TS variables that might be functions
+    if (
+      [
+        "javascript",
+        "typescript",
+        "javascriptreact",
+        "typescriptreact",
+      ].includes(languageId)
+    ) {
+      if (
+        symbol.kind === vscode.SymbolKind.Variable ||
+        symbol.kind === vscode.SymbolKind.Field ||
+        symbol.kind === vscode.SymbolKind.Property
+      ) {
+        return true;
+      }
+    }
+
+    // For containers that might contain methods
+    if (
+      symbol.kind === vscode.SymbolKind.Class ||
+      symbol.kind === vscode.SymbolKind.Interface ||
+      symbol.kind === vscode.SymbolKind.Struct ||
+      symbol.kind === vscode.SymbolKind.Module ||
+      symbol.kind === vscode.SymbolKind.Namespace
+    ) {
+      return true;
+    }
+  }
+
+  // For anything else, be conservative and don't treat as a function
+  return false;
 }
 
 /**
@@ -396,14 +559,12 @@ function isFunction(sym: vscode.DocumentSymbol, languageId: string): boolean {
     case "typescriptreact":
     case "javascript":
     case "javascriptreact":
-      // For JavaScript/TypeScript, also consider arrow functions and class methods
+      // For JavaScript/TypeScript, only consider certain symbols as functions
+      // Variables/fields are now checked in isActualFunction to ensure they're
+      // actually functions, not just simple variable declarations
       return (
         sym.kind === vscode.SymbolKind.Class || // For class methods
-        sym.kind === vscode.SymbolKind.Field || // For class fields that might be arrow functions
-        sym.kind === vscode.SymbolKind.Variable || // For variables that might be arrow functions
-        sym.kind === vscode.SymbolKind.Property || // For object properties that are functions
-        sym.kind === vscode.SymbolKind.Module || // For JS modules
-        sym.kind === vscode.SymbolKind.Object // For JS objects
+        sym.kind === vscode.SymbolKind.Module // For JS modules
       );
 
     case "python":
@@ -432,8 +593,8 @@ function isFunction(sym: vscode.DocumentSymbol, languageId: string): boolean {
  * Clears all decorations in the given editor.
  */
 function clearAllDecorations(editor: vscode.TextEditor) {
-  editor.setDecorations(DIM_DECORATION, []);
-  editor.setDecorations(NORMAL_DECORATION, []);
+  editor.setDecorations(dimDecoration, []);
+  editor.setDecorations(normalDecoration, []);
 }
 
 // For debugging: register a command to log all symbols in the current document
@@ -455,6 +616,16 @@ function registerDebugCommand(context: vscode.ExtensionContext) {
       console.log("All symbols:", symbols);
       console.log("Language ID:", editor.document.languageId);
 
+      // Log current configuration
+      const config = vscode.workspace.getConfiguration("spotlighter");
+      console.log("Current configuration:", {
+        enabled: config.get("enabled"),
+        dimOpacity: config.get("dimOpacity"),
+        dimBackground: config.get("dimBackground"),
+        dimBackgroundColor: config.get("dimBackgroundColor"),
+        normalOpacity: config.get("normalOpacity"),
+      });
+
       // Log language-specific debugging info
       if (editor.document.languageId === "python") {
         logPythonDebugInfo(editor.document, editor.selection.active);
@@ -469,6 +640,24 @@ function registerDebugCommand(context: vscode.ExtensionContext) {
         logJsDebugInfo(symbols);
       } else if (editor.document.languageId === "go") {
         logGoDebugInfo(symbols);
+      }
+
+      // For the current cursor position, check if it's in a function
+      const position = editor.selection.active;
+      const functionSymbol = findEnclosingFunctionSymbol(
+        symbols,
+        position,
+        editor.document.languageId
+      );
+
+      if (functionSymbol) {
+        console.log("Current position is in symbol:", functionSymbol);
+        console.log(
+          "Is actual function:",
+          isActualFunction(functionSymbol, editor.document.languageId)
+        );
+      } else {
+        console.log("Current position is not in any function symbol");
       }
 
       vscode.window.showInformationMessage(
@@ -556,6 +745,15 @@ function logJsDebugInfo(symbols: vscode.DocumentSymbol[]) {
   console.log(
     `Found ${potentialFunctionVars.length} variables that could be functions`
   );
+
+  // Check how many variables span multiple lines (likely functions)
+  const multiLineVars = potentialFunctionVars.filter(
+    (sym) => sym.range.end.line - sym.range.start.line > 0
+  );
+
+  console.log(
+    `Found ${multiLineVars.length} multi-line variables (likely functions)`
+  );
 }
 
 /**
@@ -622,4 +820,8 @@ export function deactivate() {
   if (vscode.window.activeTextEditor) {
     clearAllDecorations(vscode.window.activeTextEditor);
   }
+
+  // Dispose of decoration types
+  dimDecoration.dispose();
+  normalDecoration.dispose();
 }
