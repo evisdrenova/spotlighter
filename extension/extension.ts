@@ -18,6 +18,7 @@ const SUPPORTED_LANGUAGES = [
   "python",
   "javascript",
   "javascriptreact",
+  "go",
 ];
 
 /**
@@ -412,6 +413,16 @@ function isFunction(sym: vscode.DocumentSymbol, languageId: string): boolean {
         sym.kind === vscode.SymbolKind.Module
       );
 
+    case "go":
+      // For Go, consider structs and interfaces (which contain methods)
+      return (
+        sym.kind === vscode.SymbolKind.Struct ||
+        sym.kind === vscode.SymbolKind.Interface ||
+        sym.kind === vscode.SymbolKind.Class ||
+        sym.kind === vscode.SymbolKind.Namespace || // For package-level functions
+        sym.kind === vscode.SymbolKind.Module // For package declarations
+      );
+
     default:
       return false;
   }
@@ -456,6 +467,8 @@ function registerDebugCommand(context: vscode.ExtensionContext) {
         ].includes(editor.document.languageId)
       ) {
         logJsDebugInfo(symbols);
+      } else if (editor.document.languageId === "go") {
+        logGoDebugInfo(symbols);
       }
 
       vscode.window.showInformationMessage(
@@ -543,6 +556,65 @@ function logJsDebugInfo(symbols: vscode.DocumentSymbol[]) {
   console.log(
     `Found ${potentialFunctionVars.length} variables that could be functions`
   );
+}
+
+/**
+ * Log Go-specific debug information
+ */
+function logGoDebugInfo(symbols: vscode.DocumentSymbol[]) {
+  // Log counts of different symbol kinds to help with debugging
+  const kindCounts: Record<string, number> = {};
+
+  function countSymbolKinds(syms: vscode.DocumentSymbol[]) {
+    for (const sym of syms) {
+      const kind = vscode.SymbolKind[sym.kind] || sym.kind.toString();
+      kindCounts[kind] = (kindCounts[kind] || 0) + 1;
+
+      if (sym.children && sym.children.length > 0) {
+        countSymbolKinds(sym.children);
+      }
+    }
+  }
+
+  countSymbolKinds(symbols);
+  console.log("Symbol kinds found in Go file:", kindCounts);
+
+  // Log function-like symbols
+  const functionSymbols = symbols.filter(
+    (sym) => sym.kind === vscode.SymbolKind.Function
+  );
+
+  const methodSymbols = symbols.filter(
+    (sym) => sym.kind === vscode.SymbolKind.Method
+  );
+
+  console.log(`Found ${functionSymbols.length} functions`);
+  console.log(`Found ${methodSymbols.length} methods`);
+
+  // Log struct and interface declarations
+  const structSymbols = symbols.filter(
+    (sym) => sym.kind === vscode.SymbolKind.Struct
+  );
+
+  const interfaceSymbols = symbols.filter(
+    (sym) => sym.kind === vscode.SymbolKind.Interface
+  );
+
+  console.log(`Found ${structSymbols.length} structs`);
+  console.log(`Found ${interfaceSymbols.length} interfaces`);
+
+  // Check for nested functions or methods within structs
+  let nestedMethodCount = 0;
+  for (const struct of structSymbols) {
+    const methods = struct.children.filter(
+      (child) =>
+        child.kind === vscode.SymbolKind.Method ||
+        child.kind === vscode.SymbolKind.Function
+    );
+    nestedMethodCount += methods.length;
+  }
+
+  console.log(`Found ${nestedMethodCount} methods within structs`);
 }
 
 export function deactivate() {

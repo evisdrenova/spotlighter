@@ -1,10 +1,6 @@
 # Spotlighter
 
-
-
 https://github.com/user-attachments/assets/2d67fd7b-28ac-48da-95a0-f079246b3ed1
-
-
 
 **Spotlighter** is a Visual Studio Code extension that dims everything outside of the current Rust function you’re editing. It helps you focus on the specific function or method under your cursor by lowering the opacity of all other code in the file.
 
@@ -13,11 +9,15 @@ https://github.com/user-attachments/assets/2d67fd7b-28ac-48da-95a0-f079246b3ed1
 - When your cursor is inside a function, Spotlighter uses Rust symbols (provided by [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)) to determine that function’s boundaries.
 - It applies a “dim” decoration to everything else, so the function you’re working on stays fully visible.
 
-## Prerequisites
+## Supported languages
 
-1. **Visual Studio Code** – latest version recommended.
-2. **rust-analyzer** – make sure you have this extension installed for Rust symbol support.
-3. **Rust project layout** – typically a `Cargo.toml` and a `src/` folder so rust-analyzer can parse your code.
+1. Rust
+2. Javascript
+3. JavascriptReact
+4. Typescript
+5. TypescriptReact
+6. Python
+7. Go
 
 ## Installation
 

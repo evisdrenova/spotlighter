@@ -18,7 +18,8 @@
     "onLanguage:typescriptreact",
     "onLanguage:python",
     "onLanguage:javascript",
-    "onLanguage:javascriptreact"
+    "onLanguage:javascriptreact",
+    "onLanguage:go"
   ],
   "main": "./out/extension.js",
   "contributes": {
