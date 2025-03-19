@@ -1,8 +1,8 @@
 {
   "name": "spotlighter",
-  "displayName": "Spotlight for Code in VSCode",
+  "displayName": "Spotlighter",
   "description": "Dims all code outside the current function with your cursor.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "repository": "https://github.com/evisdrenova/spotlighter",
   "publisher": "EvisDrenova",
   "license": "MIT",
