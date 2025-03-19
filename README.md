@@ -1,5 +1,11 @@
 # Spotlighter
 
+
+
+https://github.com/user-attachments/assets/2d67fd7b-28ac-48da-95a0-f079246b3ed1
+
+
+
 **Spotlighter** is a Visual Studio Code extension that dims everything outside of the current Rust function you’re editing. It helps you focus on the specific function or method under your cursor by lowering the opacity of all other code in the file.
 
 ## How It Works
